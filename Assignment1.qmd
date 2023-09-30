@@ -1,0 +1,201 @@
+---
+title: "Homework1"
+author: "Derek Walker"
+format: html
+editor: visual
+embed-resources: true
+---
+
+## Question 1
+
+```{r}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(stats)
+dta2002 <- as.data.table(read.table(file='/Users/gazallab/Downloads/ad_viz_plotval_data-2.csv', header=T, sep=","))
+
+
+dta2022 <- as.data.table(read.table(file='/Users/gazallab/Downloads/ad_viz_plotval_data.csv',header=T, sep=','))
+
+
+head(dta2002)
+tail(dta2002)
+head(dta2022)
+tail(dta2022)
+
+dim(dta2002)
+dim(dta2022)
+
+str(dta2002)
+str(dta2022)
+
+mean(is.na(dta2022))
+mean(which(is.na(dta2022)))
+
+names(which(colSums(is.na(dta2002))>0))
+names(which(colSums(is.na(dta2022))>0))
+summary(dta2002$CBSA_CODE)
+summary(dta2022$CBSA_CODE)
+
+summary(dta2002$Daily.Mean.PM2.5.Concentration)
+summary(dta2022$Daily.Mean.PM2.5.Concentration)
+
+hist(dta2002$Daily.Mean.PM2.5.Concentration)
+hist(dta2022$Daily.Mean.PM2.5.Concentration) 
+
+dta2022 <- dta2022[order(dta2022$Daily.Mean.PM2.5.Concentration),]
+dta2002 <- dta2002[order(dta2002$Daily.Mean.PM2.5.Concentration),]
+
+tail(dta2002$Daily.Mean.PM2.5.Concentration,50)
+tail(dta2022$Daily.Mean.PM2.5.Concentration,50)
+
+
+table(dta2002$Date)
+table(dta2022$Date)
+
+summary(dta2002$SITE_LATITUDE)
+summary(dta2002$SITE_LONGITUDE)
+summary(dta2022$SITE_LATITUDE)
+summary(dta2022$SITE_LONGITUDE)
+
+```
+
+From our initial exploratory analysis we see that Pm2.5 levels in 2002 range from 0 to 104.3 and in 2022 they range from -2.2 to 302.5. The mean Pm2.5 level in 2002 was 16.12 and in 2022 the mean was 8.56. All these values are legitimate Pm2.5 values. In addition, our date variable has no inordinary dates or patterns. These are the most important variables to look at in regard to answering our main question.
+
+In regard to missingness, CBSA_CODE is the only variable with missing values in both datasets. Considering our analysis does not require this variable, there is no case to manipulate the variable. Neither the latitude or longitude variables had any points that seem to be extreme or improperly inputted.
+
+## Question 2
+
+```{r message=F}
+joined <- rbind(dta2002, dta2022)
+library(lubridate)
+joined$year <- year(mdy(joined$Date))
+names(joined)[names(joined) == "SITE_LATITUDE"] <- "lat"
+names(joined)[names(joined) == "SITE_LONGITUDE"] <- "lon"
+names(joined)[names(joined) == "Daily.Mean.PM2.5.Concentration"] <- "pm25"
+names(joined)
+```
+
+## Question 3
+
+```{r warning=F, message=F}
+library(leaflet)
+
+leafletdta <- unique(joined, by="Site.ID")
+
+yr.pal <- colorFactor(c('darkblue','lightgreen'), domain=joined$year)
+yr.pal
+
+epamap <- leaflet(leafletdta) %>% 
+  addProviderTiles('CartoDB.Positron') %>% 
+  addCircles(
+    lat = ~lat, lng=~lon,
+    label = ~paste0(round(year,2), ' C'), color = ~ yr.pal(year),
+    opacity = 1, fillOpacity = 1, radius = 500
+    ) %>%
+  addLegend('bottomleft', pal=yr.pal, values=leafletdta$year,
+          title='Year', opacity=1)
+
+epamap
+```
+
+In observing the spatial distribution of the sites, I notice many of the EPA sites are located along the coast of California or towards the middle of the state from a vertical standpoint. There is a large conglomeration of sites in both the Bay area (San Jose, San Francisco) and the Southern California area (Los Angeles, San Diego) as well. The mountainous region located on the eastern side of the state has fewer sites compared to the coastal area and other major cities. Additionally, I notice many of the sites changed in location from the year of 2002 to the year of 2022.
+
+## Question 4
+
+```{r}
+joined <- joined[order(joined$pm25),]
+attach(joined)
+summary(pm25)
+hist(pm25)
+boxplot(pm25)
+head(pm25,10) # obseve potential outliers at low end of range
+tail(pm25,10) # obseve potential outliers at high end of range
+
+is.numeric(pm25) # make sure the data is all numeric
+length(which(is.na(pm25))) # check NAs
+
+tapply(pm25, year, summary) #rechecking distribution by year
+
+pm25summary <- joined %>% 
+  group_by(year) %>% 
+  summarize(mean = mean(pm25),
+            sum = sum(pm25),
+            min = min(pm25),
+            q1 = quantile(pm25, 0.25),
+            median= median(pm25),
+            q3 = quantile(pm25, 0.75),
+            max = max(pm25),
+            sd = sd(pm25),
+            npm25 = n()
+            )
+pm25summary
+
+# How many observations of pm2.5 in 2022 is greater than the greatest observation of pm2.5 in 2002
+temp <- joined %>%
+    group_by(year) %>%
+    summarize(hmg = sum(pm25 > 104.3))
+temp
+```
+
+None of the values appear to be missing. In addition, the range of the measurement (pm25) is -2.2 to 302.5. Upon further research it appears that the upper limit of the range is in fact a valid measure of pm25 and according to the EPA is indicative that the air quality is very hazardous. As far as the negative measurements go; if the atmosphere is very clean (approaching 0 μg/m3) and there is noise in the measurement, then a negative number may in fact be valid. By invalidating data or correcting to 0, it may potentially lead to biasing data higher. Therefore, I personally think it is of the best interest to keep all data points for the pm25 measurement in the data.
+
+During the year of 2002, 15,976 observations were taken and during the year of 2022, 57,761 observations were taken. The summaries of the daily concentrations of PM2.5 grouped by year indicate that the mean daily PM2.5 measurement from 2002 to 2022 decreased by 7.56. As well, the standard deviation of the data between the years of 2002 and 2022 decreased significantly from 13.87 to 7.77. This most likely is explained by the increase in the number of observations used when comparing the year of 2002 to 2022. This being said the range in the year 2022 was much larger than the range of 2002 and there were 32 observations of PM2.5 from the year 2022 that were greater than the greatest observation of PM2.5 in 2002.
+
+## Question 5
+
+```{r warning=F}
+#County-level
+joined_avg <- joined[,.(
+  pm25     = mean(pm25,na.rm=TRUE)
+), by=c("COUNTY", "year")]
+
+ggplot(data = joined_avg) + 
+  geom_point(mapping = aes(x = year, y = pm25, color = COUNTY)) +geom_line(mapping = aes(x = year, y = pm25, color = COUNTY)) + labs(title="Change in Mean PM2.5 Concentration Between 2002 to 2022 by County")
+```
+
+```{r}
+#State-Level
+library(stats)
+joined2002 <- joined %>% filter(year==2002)
+joined2022 <- joined %>% filter(year==2022) 
+pm25mean2022 = mean(joined2022$pm25)
+pm25mean2002 = mean(joined2002$pm25)
+
+ggplot(joined2002, aes(x=pm25, color=factor(year))) + 
+ geom_histogram(aes(y=..density.., colour="black", fill="orange"), alpha=0.5, 
+                position="identity")+labs(title="Histogram of Mean PM2.5 levels across California in 2002") +  theme(legend.position="none") + geom_vline(data=joined2002, aes(xintercept=pm25mean2002),
+               linetype="dashed", size=0.5)
+
+
+
+ggplot(joined2022, aes(x=pm25, color=factor(year))) + 
+ geom_histogram(aes(y=..density..),colour="black", fill="blue", alpha=0.5, 
+                position="identity") + labs(title="Histogram of Mean PM2.5 levels across California in 2022") + geom_vline(data=joined2022, aes(xintercept=pm25mean2022),
+               linetype="dashed", size=0.5)
+
+boxplot(joined2022$pm25, main="Boxplot of Pm2.5 Levels in 2022",ylab="PM2.5 Levels")
+boxplot(joined2002$pm25, main="Boxplot of Pm2.5 Levels in 2002",ylab="PM2.5 Levels")
+```
+
+```{r}
+#Site-Level
+joined_avg2 <- joined[,.(
+  pm25     = mean(pm25,na.rm=TRUE)
+), by=c("Site.ID", "year","COUNTY")]
+joined_avg2 <-joined_avg2 %>% filter(COUNTY=="Los Angeles")
+
+ggplot(data = joined_avg2) + 
+  geom_point(mapping = aes(x = year, y = pm25, color = factor(Site.ID))) + geom_line(mapping = aes(x = year, y = pm25, color = as.factor(Site.ID)))+ xlab("Year") + ylab("Mean PM2.5 Concentration Per Site") + labs( title='Relationship of Mean PM2.5 Concentration Per Site Between 2002 and 2022') + labs(color = "Year")
+```
+
+After observing the plots provided for each level here is our interpretation of what we observe.
+
+State-Level: At the state level, which includes all all the original data points, we see a distinct difference in both the histograms and the box plots for each respective year 2002 and 2022.
+
+County-Level: At the county level we plot the mean values for each county for both years of 2002 and 2022. We notice that from the year 2002 to the year 2022 a large majority of the counties have a negative slope indicating the PM2.5 levels decreased between the two years.
+
+Site-Level: Of the sites in Los Angeles county, of which we collected data in both 2002 and 2022, all of them exhibit a negative slope again indicating the PM2.5 levels decreased between the two years.
+
+At each level (state, county, and site) we see a decrease in the particulate matter air pollution with aerodynamic diameter less than 2.5 levels. From this information we can infer that in general Pm2.5 levels have decreased in California over the last 20 years (from 2002 to 2022).
